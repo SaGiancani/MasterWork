@@ -29,7 +29,7 @@ def plot_reward(a, b, name_a, name_b, hyperparam_dict, num=1):
     fig.savefig(hyperparam_dict['name']+'/'+name_a+'_fig'+str(num)+'.png')
 
     
-def multi_plot(lists_of_tuples, hyperparam_dict, num): 
+def multi_plot(lists_of_tuples, hyperparam_dict, num, title): 
     # Dangerous handling of the num figure
     #num = np.random.randint(0, 1000)
     plt.rcParams.update({'font.size': 18})
@@ -37,7 +37,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num):
     # Colors plotting managing  
     #colors = [cmap(i) for i in np.linspace(0, 1, len(lists_of_tuples))]
     cmap = plt.get_cmap('gnuplot')
-    colors = ['black', 'blue', 'orange', 'green', 'red']
+    colors = ['blue','black', 'orange', 'green', 'red']
     counter = 0
     for count, i in enumerate(lists_of_tuples):
         if i[3] == 'dash':
@@ -51,7 +51,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num):
                 counter +=1
                 ax2 = ax1.twinx()
                 ax2.set_ylabel(i[1])  # we already handled the x-label with ax1
-                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
+                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= 'orange')
                 lines2, labels2 = ax2.get_legend_handles_labels()
             else:
                 ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
@@ -64,11 +64,11 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num):
                              (np.array(i[0]) + np.array(i[4])), 
                              color=colors[count], alpha = 0.25)
         if i[2]==4:
-            ax1.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color='blue')
+            ax1.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color='black')
             ax1.fill_between(np.linspace(0, hyperparam_dict['max_episodes'], len(i[0])), 
                              (np.array(i[4])),
                              np.array(i[0]),
-                             color='blue', alpha = 0.25)
+                             color='black', alpha = 0.25)
             
     
     lines, labels = ax1.get_legend_handles_labels()
@@ -82,6 +82,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num):
         ax1.legend(lines, labels, loc=4, fancybox=True, shadow=False)
 
     ax1.grid()
+    fig.suptitle(title, fontsize=20)
     ax1.set_ylabel('Rewards ')
     ax1.set_xlabel('Episodes')
     #plt.show()
