@@ -28,7 +28,7 @@ env.seed(my_seed)
 
 # Define name and hyperparameters of the model
 filename = str(time.asctime(time.localtime(time.time())))
-n_joints = (2,3) 
+n_joints = (2,2) 
 epsilon = 1
 gamma = 0.99
 lr = 1e-3
@@ -63,11 +63,11 @@ print('The total time to compile '+str(max_episodes)+' episodes for a maximum of
 
 # Plot
 lists = []
-lists.append((ep_rewards, 'Episode Rewards', 0, 'dash'))
-lists.append((running_rewards, 'Running Rewards', 0, 'regular'))
+#lists.append((ep_rewards, 'Episode Rewards', 0, 'dash'))
+lists.append((running_rewards, 'Running Rewards', 4, 'regular', ep_rewards))
 lists.append((eps_history, 'Epsilon History', 1, 'regular'))
 #lists.append((avg_score, 'Average Rewards', 0))
-plot.multi_plot(lists, hyperparam_dict)
+plot.multi_plot(lists, hyperparam_dict, 1, 'DQN')
 
 # Saving the hyperparameters dictionary into a file
 hyperparam_dict['total_time']= (time.time() - start_time)/60
