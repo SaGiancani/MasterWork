@@ -180,7 +180,7 @@ def q_learning(env, DQN_Agent, log_interval = 100):
     num_steps = DQN_Agent.h['max_steps']
     running_rewards = []
     episodic_rewards = []
-    running_reward = 1
+    running_reward = None
     time_count = time.time()
     eps_history_avg = []
     for i_episode in count(1):
@@ -217,9 +217,12 @@ def q_learning(env, DQN_Agent, log_interval = 100):
             # +1 to the counter
             t +=1
                                                     
-        # Update the running reward
-        #print('episodic reward: ' + str(episodic_reward))
-        running_reward = 0.05 * episodic_reward + (1 - 0.05) * running_reward        
+        # Update the running reward: applying a exponential moving average 
+        if running_reward is None:
+            running_reward = episodic_reward
+        else:
+            running_reward = 0.05 * episodic_reward + ( 1- 0.05) * running_reward
+            
         # Appending of the values to plot
         episodic_rewards.append(episodic_reward)
         running_rewards.append(running_reward)
