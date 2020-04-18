@@ -16,6 +16,8 @@ class NeuralNetworkPolicy(nn.Module):
         self.affine2 = nn.Linear(256, 256)
         self.dropout2 = nn.Dropout(p=0.6)
         self.affine3 = nn.Linear(256, self.output)
+        # Value function for baseline computation
+        self.states = []
         # Lists used on REINFORCE Algorithm
         self.saved_log_probs = []
         self.rewards = []
