@@ -2,10 +2,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.nn.utils import clip_grad_norm_
 from torch.distributions import Categorical
 import numpy as np
 from itertools import count
 import neural_network_policy as N
+import baseline as b
 import random
 import time
 
@@ -17,6 +19,8 @@ class REINFORCE_Agent(object):
         self.n_states = self.h['states']  
         self.GAMMA = self.h['gamma']        
         self.lr = self.h['learning_rate']
+        print(self.lr)
+        # Check on mode
         if 'evaluation_interval' in h.keys():
             self.EVALUATE_MODE = self.h['evaluation_interval']
         # Instantiate the Network
@@ -25,10 +29,22 @@ class REINFORCE_Agent(object):
             self.policy.train()
         else:
             self.policy = policy
-        # Instantiate the optimizer
-        self.optimizer = optim.Adam(self.policy.parameters(), lr = self.lr)
+            
+        # Instantiate a baseline object. It's inspired to the replay system of the DQN approach    
+        if ('baseline' in self.h.keys()) and (self.h['baseline']):
+            self.value_function = N.NeuralNetworkPolicy(1, self.n_states)
+            # It could work with lr/10: 1e-4 in both the optimizer or just on the value_function
+            self.optimizer = optim.Adam(self.policy.parameters(), lr = self.lr)
+            self.optimizer_value = optim.Adam(self.value_function.parameters(), lr = self.lr) 
+            self.baseline = []
+            self.running_base = None
+            self.states = []
+        
+        else:
+            # Instantiate the optimizer
+            self.optimizer = optim.Adam(self.policy.parameters(), lr = self.lr)
+        # Some utility counter
         self.counter=0
-
 
     def select_action(self, state):
         # Convert the state from a numpy array to a torch tensor
@@ -87,49 +103,102 @@ class REINFORCE_Agent(object):
             return action
 
     
-    def finish_episode(self):
+    def finish_episode(self, baseline_switch = False):
         # Variable for the current return
         policy_loss = []
         returns = []
+        returns_base = []
         G = 0
+        G_base = 0
+                
+        # If the baseline mode is actived this algorithm is used
+        if baseline_switch and (self.states != None):
+            # Go through the list of observed rewards and calculate the returns
+            # gamma discount factor
+            for r in self.policy.rewards[::-1]:
+                # Undiscounted return function
+                G_base = r + G_base
+                returns_base.insert(0, G_base)
+        
+            # Convert the list of returns into a torch tensor
+            returns_base = torch.tensor(returns_base)
+            
+            deltas = []
+            base = []
 
-        # Define a small float which is used to avoid divison by zero
-        eps = np.finfo(np.float32).eps.item()
+            for s, G_base, log_prob  in zip(self.states, 
+                                       returns_base, 
+                                       self.policy.saved_log_probs):
+                v = self.value_function.forward(s)
+                base.append(v)
+                delta = G_base - v
+                deltas.append(-self.GAMMA*delta*v)
+                policy_loss.append(-self.GAMMA*log_prob*delta)
     
-        # Go through the list of observed rewards and calculate the returns
-        # gamma discount factor
-        for r in self.policy.rewards[::-1]:
-            G = r + self.GAMMA * G
-            returns.insert(0, G)
+            # To keep track of the baseline over the episode
+            base_mean = torch.cat(base).mean()
+            if self.running_base == None:
+                self.running_base = base_mean
+            else:
+                self.running_base = 0.05 * base_mean + ( 1- 0.05) * self.running_base
+            self.baseline.append(self.running_base)
+            
+            # w gradient (for the value_functin)
+            self.optimizer_value.zero_grad()
+            value_loss_w = torch.cat(deltas).mean()
+            value_loss_w.backward(retain_graph=True)
+            self.optimizer_value.step()
+            
+            # Theta gradient (for the policy)
+            self.optimizer.zero_grad()
+            policy_loss = torch.cat(policy_loss).mean()
+            policy_loss.backward(retain_graph=True)
+            self.optimizer.step()
+            
+            # Reset the saved rewards and log probabilities
+            del self.states[:]
+            del self.policy.rewards[:]
+            del self.policy.saved_log_probs[:]
+                    
+        # Else the standard REINFORCE is used
+        else:
+            # Define a small float which is used to avoid divison by zero
+            eps = np.finfo(np.float32).eps.item()
+        
+            # Go through the list of observed rewards and calculate the returns
+            # gamma discount factor
+            for r in self.policy.rewards[::-1]:
+                G = r + self.GAMMA * G
+                returns.insert(0, G)
     
-        # Convert the list of returns into a torch tensor
-        returns = torch.tensor(returns)
+            # Convert the list of returns into a torch tensor
+            returns = torch.tensor(returns)
+            
+            # Here we normalize the returns by subtracting the mean and dividing
+            # by the standard deviation. Normalization is a standard technique in
+            # deep learning and it improves performance, as discussed in
+            # http://karpathy.github.io/2016/05/31/rl/
+            returns = (returns - returns.mean()) / (returns.std() + eps)
+        
+            # Here, we deviate from the standard REINFORCE algorithm as discussed above
+            for log_prob, G in zip(self.policy.saved_log_probs, returns):
+                policy_loss.append(-log_prob * G)
+        
+            # Reset the gradients of the parameters
+            self.optimizer.zero_grad()
     
-        # Here we normalize the returns by subtracting the mean and dividing
-        # by the standard deviation. Normalization is a standard technique in
-        # deep learning and it improves performance, as discussed in
-        # http://karpathy.github.io/2016/05/31/rl/
-        returns = (returns - returns.mean()) / (returns.std() + eps)
+            # Compute the cumulative loss
+            policy_loss = torch.cat(policy_loss).mean()
     
-        # Here, we deviate from the standard REINFORCE algorithm as discussed above
-        for log_prob, G in zip(self.policy.saved_log_probs, returns):
-            policy_loss.append(-log_prob * G)
+            # Backpropagate the loss through the network
+            policy_loss.backward()
     
-        # Reset the gradients of the parameters
-        self.optimizer.zero_grad()
-    
-        # Compute the cumulative loss
-        policy_loss = torch.cat(policy_loss).mean()
-    
-        # Backpropagate the loss through the network
-        policy_loss.backward()
-    
-        # Perform a parameter update step
-        self.optimizer.step()
-    
-        # Reset the saved rewards and log probabilities
-        del self.policy.rewards[:]
-        del self.policy.saved_log_probs[:]
+            # Perform a parameter update step
+            self.optimizer.step()
+        
+            # Reset the saved rewards and log probabilities
+            del self.policy.rewards[:]
+            del self.policy.saved_log_probs[:]
 
 
 def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', chooser=None, log_interval=100, tb=None):
@@ -137,11 +206,13 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
         select_action = Agent.h['select_action_algorithm']
         max_steps_eval = Agent.h['max_steps_eval']
         max_episodes_eval = Agent.h['max_episodes_eval']
+        baseline_switch = Agent.h['baseline']
+        
     # Counter and time counter
     time_count=time.time()
     
     # To track the reward across consecutive episodes (smoothed)
-    running_reward = 1.0
+    running_reward = None
     
     # Lists to store the episodic and running rewards for plotting
     ep_rewards = list()
@@ -182,6 +253,15 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
 
                 # Store the current reward
                 Agent.policy.rewards.append(reward)
+                
+                if baseline_switch:
+                    # Convert the state from a numpy array to a torch tensor
+                    state_v = torch.from_numpy(state).float().unsqueeze(0)
+                    #value = Agent.value_function.forward(state_v)
+                    #print('state: ' + str(state_v))
+                    #Agent.value_function.states.append(state_v)
+                    Agent.states.append(state_v)
+                    #baseline.store(reward)
             
             if mode == 'eval':
                 if chooser == 1:
@@ -208,8 +288,11 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
             if done:
                 break
                
-        # Update the running reward
-        running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+        # Update the running reward: applying a exponential moving average 
+        if running_reward is None:
+            running_reward = ep_reward
+        else:
+            running_reward = 0.05 * ep_reward + ( 1- 0.05) * running_reward
         
         # Store the rewards for plotting
         ep_rewards.append(ep_reward)
@@ -221,7 +304,7 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
         if mode == 'train':
             actions_array_ = torch.Tensor(actions_array[-max_steps:]).float().unsqueeze(1)
             # Plot on TensorBoardx the occurrance of an action over time steps
-            tb.add_histogram('Actions Occurrance', actions_array_, i_episode)	        
+            #tb.add_histogram('Actions Occurrance', actions_array_, i_episode)	        
 
             # Plot on TensorBoardx the mean of the probabilities of an action over the time steps
             #for i, val in enumerate(torch.mean(actions_prob, axis=0)):
@@ -232,10 +315,10 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
             #    tb.add_scalar('Reward running', running_reward, i_episode)
             #    tb.add_scalar('Episode Reward', ep_reward, i_episode )
         
-            tb.close()
+            #tb.close()
 
             # Perform the parameter update according to REINFORCE
-            Agent.finish_episode()
+            Agent.finish_episode(baseline_switch)
             
             # Print check: print Episode, Last and Average reward every log_interval times
             if (i_episode % log_interval == 0)  and (i_episode > 0):
