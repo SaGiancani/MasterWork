@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('template')
 import matplotlib.pyplot as plt
 import numpy as np
 from tensorboardX import SummaryWriter
@@ -29,7 +31,7 @@ def plot_reward(a, b, name_a, name_b, hyperparam_dict, num=1):
     fig.savefig(hyperparam_dict['name']+'/'+name_a+'_fig'+str(num)+'.png')
 
     
-def multi_plot(lists_of_tuples, hyperparam_dict, num, title): 
+def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Rewards'): 
     # Dangerous handling of the num figure
     #num = np.random.randint(0, 1000)
     plt.rcParams.update({'font.size': 18})
@@ -37,7 +39,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title):
     # Colors plotting managing  
     #colors = [cmap(i) for i in np.linspace(0, 1, len(lists_of_tuples))]
     cmap = plt.get_cmap('gnuplot')
-    colors = ['blue','black', 'orange', 'green', 'red']
+    colors = ['orange', 'blue','black', 'green', 'red']
     counter = 0
     for count, i in enumerate(lists_of_tuples):
         if i[3] == 'dash':
@@ -83,11 +85,12 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title):
 
     ax1.grid()
     fig.suptitle(title, fontsize=20)
-    ax1.set_ylabel('Rewards ')
-    ax1.set_xlabel('Episodes')
+    ax1.set_ylabel(y)
+    ax1.set_xlabel(x)
     #plt.show()
     # Saving the png file
     fig.savefig(hyperparam_dict['name']+'/multiplot_fig'+str(num)+'.png')
+
 
 def plot_mean_std(a, name_a, hyperparam_dict, type_im, num=1):
     plt.rcParams.update({'font.size': 18})
@@ -137,4 +140,36 @@ def subplot_three_one(a, b, c, d, name_a, name_b, name_c, name_d, max_episodes, 
     plt.legend(ncol=2)
     
     fig.savefig(filename+'/'+filename+'__fig.png')
+    
+def plot_imgs(lists_of_tuples, n_elements, title, size, filename, num):
+    # Show n_elements images from the selected batch (original, reconstructed from 
+    #the pure Convolutional autoencoder, reconstructed from the autoencoder)
+    if (len(lists_of_tuples)==0):
+        print('Warning: The list of tuples is empty!')
+        return
+    fig, axes = plt.subplots(nrows=len(lists_of_tuples), ncols=n_elements,figsize=(16,8))
+    
+    # input images on top row, reconstructions on bottom
+    if (len(lists_of_tuples)>1):
+        for images, row in zip(lists_of_tuples, axes):
+            i = 0
+            for img, ax in zip(images[0], row):
+                ax.imshow(img.reshape(size,size), cmap='gray')
+                ax.get_xaxis().set_visible(False)
+                if i==0:
+                    ax.set_ylabel(images[1], fontsize=16)
+                else:
+                    ax.get_yaxis().set_visible(False)
+                i+=1
+                
+    if (len(lists_of_tuples)==1):
+        for ax, img in zip(axes, lists_of_tuples[0][0]):
+            ax.imshow(img.reshape(size,size), cmap='gray')
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)    
+
+    fig.suptitle(title, fontsize=16)
+    #fig.tight_layout()
+    fig.savefig(filename+'/'+filename+'imgs_'+str(num)+'_fig.png')
+
 
