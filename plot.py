@@ -169,7 +169,7 @@ def plot_imgs(lists_of_tuples, n_elements, title, size, filename, num):
             ax.get_yaxis().set_visible(False)    
 
     fig.suptitle(title, fontsize=16)
-    #fig.tight_layout()
+    #pfig.tight_layout()
     fig.savefig(filename+'/'+filename+'imgs_'+str(num)+'_fig.png')
 
 
