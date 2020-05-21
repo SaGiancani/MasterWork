@@ -6,6 +6,7 @@ from torch.distributions import Categorical
 import numpy as np
 from itertools import count
 
+import hybrid_cae 
 import pure_cae 
 import load_data
 import time
@@ -22,23 +23,28 @@ class CAE_Agent(object):
         self.epochs = self.h['max_episodes']
         self.test_batch_num = self.h['test_batch_num']
         self.device = self.h['device']
+        self.mode_cae = self.h['mode']
+        self.val_share = self.h['percentage_of_dataset_for_eval']
+        self.interval = self.h['interval_for_print']
+        self.sched_mode = self.h['lr_scheduler_mode']
         
         #Path of the dataset
         self.path_dataset = self.h['path_dataset']
-        #self.path_dataset = "learner_teacher_10k.npz"
         
         #Number of steps per evaluated image
         self.num_steps = self.h['steps_for_each_image']
-        #self.num_steps = 10
         
         #Initialization dataset
-        self.images_set, self.img_size = load_data.init_dataset_planar(self.batch_size,
-                                                                       dataset_file_path = self.path_dataset)
+        self.images_set, self.eval_set, self.img_size = load_data.init_dataset_planar(self.batch_size,
+                                                                                      self.val_share,
+                                                                                      dataset_file_path = self.path_dataset)
         
         #Utility lists
         #Train
         self.img_array = []
         self.epoch_losses = []
+        #Evaluate
+        self.evaluated_losses = []
 
         #Reconstruction
         # Array to store the original test images
@@ -48,19 +54,44 @@ class CAE_Agent(object):
         # Array to store the code 2x1x1:
         self.encoder_out = torch.zeros((self.batch_size, 2, 1, 1))
         
-        #CAE
-        self.model_pure = pure_cae.ConvolutionalAutoencoder().to(self.device)
-        
+        if self.mode_cae == 'pure':
+            #CAE
+            self.model = pure_cae.ConvolutionalAutoencoder().to(self.device)
+        if self.mode_cae == 'hybrid':
+            #Hybrid
+            self.model = hybrid_cae.HybridConvolutionalAutoencoder().to(self.device) 
+       
         #Initialization method
         if ('initialization' in self.h.keys()) and (self.h['initialization'] == 'xavier_normal'):
-            self.model_pure.apply(pure_cae.xavier_init_normal_)
+            self.model.apply(pure_cae.xavier_init_normal_)
             
         if ('initialization' in self.h.keys()) and (self.h['initialization'] == 'xavier_uniform'):
-            self.model_pure.apply(pure_cae.xavier_init_uniform)
+            self.model.apply(pure_cae.xavier_init_uniform)
         
         #Initialization optimizer and loss-computation algorithm
-        self.optimizer_pure = torch.optim.Adam(self.model_pure.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         self.loss = nn.MSELoss()
+        # Cyclical Learning Rates for Training Neural Networks, Leslie N. Smith
+        # or simple exponential decay, gamma-based
+        self.lr_list = []
+        if self.sched_mode:
+            self.gamma = self.h['gamma']
+            if ('base_learning_rate' in self.h.keys()) and ('max_learning_rate' in self.h.keys()):
+                self.lr_base = self.h['base_learning_rate']
+                self.lr_max = self.h['max_learning_rate']
+                self.scheduler_lr = torch.optim.lr_scheduler.CyclicLR(self.optimizer, 
+                                                                      self.lr_base,
+                                                                      self.lr_max,
+                                                                      step_size_up=self.epochs/10,
+                                                                      step_size_down=None,
+                                                                      cycle_momentum = False,
+                                                                      mode='exp_range',
+                                                                      gamma=self.gamma)
+            else:
+                self.scheduler_lr = torch.optim.lr_scheduler.ExponentialLR(self.optimizer,gamma=self.gamma) 
+        else:
+            # Appending the lr for printing
+            self.lr_list.append(self.lr)
         
         
     def images_during_training(self, output, epoch, index_img = 3):
@@ -74,7 +105,9 @@ class CAE_Agent(object):
     def reconstruction_encode(self, epoch, i, img):
         self.testdata_input[i] = img.detach().cpu().numpy()
         # latent from pure convolutional encoder and storing
-        latent_pure = self.model_pure.encoder(img)
+        latent_pure = self.model.encoder(img)
+        if self.mode_cae == 'hybrid':
+            latent_hybrid_ = model_hybrid.linear_e(latent_hybrid.view(-1, 8*8*128))
         self.testdata_latent_pure[i] = latent_pure
         
         # Encode the images of the test set using the encoder trained on the train set
@@ -88,7 +121,7 @@ class CAE_Agent(object):
             testdata_input[i] = img.detach().cpu().numpy()
             
             # latent from pure convolutional encoder and storing
-            latent_pure = model_pure.encoder(img)
+            latent_pure = model.encoder(img)
             testdata_latent_pure[i] = latent_pure
             #if i==4:
             #    break
@@ -112,53 +145,81 @@ class CAE_Agent(object):
 
     # Training function
     def train(self):
-        for epoch in trange(1, self.epochs+1):
+        self.model.train()
+        for epoch in range(1, self.epochs+1):
+        #for epoch in trange(1, self.epochs+1):
             for i, data in enumerate(self.images_set):
+                self.optimizer.zero_grad()
                 img_ = data[0].to(self.device)
                 img = img_.unsqueeze(1)
                 # We don't utilize the target data[1]
-                output = self.model_pure(img)
+                output = self.model(img)
                 loss_ = self.loss(output, img)
-                self.optimizer_pure.zero_grad()
                 loss_.backward()
-                self.optimizer_pure.step()
-                #Reconstruction loop inside the train loop: saving gpu store capacity 
-                # This kind of strategy is the worst for the gpu storage
-                #if epoch==self.epochs:
-                    #self.reconstruction_encode(epoch, i, img)
-            if epoch >= self.epochs:
-                self.model_pure.save(self.h['name'])
+                self.optimizer.step()
+            if self.sched_mode:
+                self.scheduler_lr.step()
+                #print(self.optimizer.param_groups[0]['lr']) 
+                self.lr_list.append(self.optimizer.param_groups[0]['lr'])
             #Printing not yet trained images, one every num_steps 
-            self.images_during_training(output, epoch)
             loss_value = loss_.item()
+            if (epoch%self.interval == 0) and (epoch>0):
+                print('Train Epoch: {}, Loss: {:.2f}, Learning Rate: {}'.format(epoch, loss_, self.lr_list[-1]))
+            self.images_during_training(output, epoch)
             self.epoch_losses.append(loss_value)
+            # Evaluate loss
+            self.eval_loss()
+            if (epoch >= self.epochs):
+                self.model.save(self.h['name'])
             
+    def eval_loss(self):
+        self.model.eval()
+        with torch.no_grad():
+            for i, data in enumerate(self.eval_set):
+                img_ = data[0].to(self.device)
+                img = img_.unsqueeze(1)
+                # We don't utilize the target data[1]
+                output = self.model(img)
+                loss_ = self.loss(output, img)
+            loss_value = loss_.item()
+            self.evaluated_losses.append(loss_value)
+            if (len(self.evaluated_losses)%self.interval == 0):
+                print('Valutation loss: {:.2f}'.format(loss_value))
+            self.model.train()
+            return
+
     def evaluation(self, mode, imgs):
         #Set eval mode on
-        self.model_pure.eval()
-
-        if type(imgs) is np.ndarray:
-            imgs = torch.Tensor(imgs)
+        self.model.eval()
+        with torch.no_grad():
+            if type(imgs) is np.ndarray:
+                imgs = torch.Tensor(imgs)
             
-        if (mode == 'model'):
-            # get sample outputs for the pure convolutional model
-            output_pure = self.model_pure(imgs.to(self.device))
+            if (mode == 'model'):
+                # get sample outputs for the pure convolutional model
+                output = self.model(imgs.to(self.device))
+                
+            if (mode == 'encoder'):
+                # get sample outputs for the encoder of the pure convolutional model
+                output = self.model.encoder(imgs.to(self.device))
+                #self.encoder_out = output_pure
+                if (self.mode_cae == 'hybrid'):
+                    tmp = output.view(-1, 2*2*128)
+                    output = self.model.linear_e(tmp.to(self.device))
+                
+            if (mode == 'decoder'):
+                if (self.mode_cae == 'hybrid'):
+                    tmp = self.model.linear_d(imgs.to(self.device))
+                    imgs = tmp.view(-1, 128, 2, 2)
+                # get sample outputs for the decoder of the pure convolutional model
+                output = self.model.decoder(imgs.to(self.device))
+                
+            if (mode != 'model') and (mode != 'encoder') and (mode != 'decoder'):
+                print('Warning: The mode choosen is wrong')
+    
+            # prep images for display
+            # use detach when it's an output that requires_grad
+            images_for_display = imgs.detach().cpu().numpy()
+            output_for_display = output.cpu().detach().numpy()
             
-        if (mode == 'encoder'):
-            # get sample outputs for the encoder of the pure convolutional model
-            output_pure = self.model_pure.encoder(imgs.to(self.device))
-            #self.encoder_out = output_pure            
-            
-        if (mode == 'decoder'):
-            # get sample outputs for the decoder of the pure convolutional model
-            output_pure = self.model_pure.decoder(imgs.to(self.device))
-            
-        if (mode != 'model') and (mode != 'encoder') and (mode != 'decoder'):
-            print('Warning: The mode choosen is wrong')
-
-        # prep images for display
-        # use detach when it's an output that requires_grad
-        images_for_display = imgs.detach().cpu().numpy()
-        output_for_display = output_pure.cpu().detach().numpy()
-        
-        return output_for_display, images_for_display
+            return output_for_display, images_for_display
