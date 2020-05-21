@@ -23,14 +23,30 @@ BATCH_SIZE = 128
 DROP_LAST = True
 NUM_WORKERS = 1
 PIN_MEMORY = True
-NUM_EPOCHS = 10
-MAX_STEPS = 10
-LR_PURE = 1e-5
+NUM_EPOCHS = 3000
+IMAGES_DURING_TRAIN = 10
+# Learning rate and parameters for lr_Scheduler
+LR = 5e-2
+GAMMA = 0.998
+#BASE_LR = 9.0e-4
+#MAX_LR = 5e-3
+BASE_LR = None
+MAX_LR = None
+LR_SCHEDULER = True
+# Path for the dataset
 PATH = "learner_teacher_10k.npz"
 TEST_BATCH_NUM = 5
-INIT = 'standard'
-#INIT = 'xavier_normal'
+#Kind of initialization
+#INIT = 'standard'
+INIT = 'xavier_normal'
 #INIT = 'xavier_uniform'
+# Architecture mode
+#MODE = 'pure'
+MODE = 'hybrid'
+# Percentage of the whole dataset dedicated to the Valutation
+PERC_FOR_EVAL= 0.1
+# How many steps between a print and another
+INTERVAL = 100
 
 # Initialize the seed
 torch.manual_seed(RANDOM_SEED)
@@ -45,16 +61,28 @@ LOADER_KWARGS = {'num_workers': NUM_WORKERS,
 
 # Initialize the hyperparameters dictionary
 hyperparam_dict = {'name': FILENAME, 
-                   'learning_rate':LR_PURE, 
-                   'steps_for_each_image':MAX_STEPS, 
+                   'learning_rate':LR,
+                   'steps_for_each_image':IMAGES_DURING_TRAIN, 
                    'max_episodes':NUM_EPOCHS, 
                    'batch_size':BATCH_SIZE, 
                    'my_seed':RANDOM_SEED, 
                    'path_dataset':PATH,
                    'device': device,
                    'test_batch_num': TEST_BATCH_NUM,
-                   'initialization': INIT
+                   'initialization': INIT,
+                   'mode': MODE,
+                   'percentage_of_dataset_for_eval': PERC_FOR_EVAL,
+                   'interval_for_print': INTERVAL,
+                   'lr_scheduler_mode': LR_SCHEDULER
                    }
+
+# Check for the use of lr_scheduler: if Base and Max lr are not instantiated, the program use the simple optimizer 
+if LR_SCHEDULER:
+    if (BASE_LR != None) and (MAX_LR != None):
+        hyperparam_dict['max_learning_rate'] = MAX_LR
+        hyperparam_dict['base_learning_rate'] = BASE_LR
+    hyperparam_dict['gamma'] = GAMMA
+    
 
 # Initialize the agent
 agent = ag_cae.CAE_Agent(hyperparam_dict)
@@ -71,7 +99,7 @@ imgs = agent.build_batch()
 
 # Evaluate the obtained model
 out, inp = agent.evaluation('model', imgs)
-out = (out, 'Pure Conv')
+out = (out, str(MODE)+'Conv')
 inp = (inp, 'Original')
 
 # Evaluate the code:
@@ -84,12 +112,32 @@ lis= []
 lis.append(inp)
 lis.append(out)
 lis.append(outcome)
-plot.plot_imgs(lis, 5, 'Evaluation Pure Conv Model', agent.img_size, FILENAME, 1)
+plot.plot_imgs(lis, 5, 'Evaluation ' + str(MODE) + ' Conv Model', agent.img_size, FILENAME, 1)
 
 # Plot of the loss across the epochs 
 lists = []
-lists.append((agent.epoch_losses, 'MSE Loss', 0, 'regular'))
-plot.multi_plot(lists, hyperparam_dict, 1, "Only Convolutional Layers  lr: "+ str(LR_PURE), x='Epochs', y='Loss')
+lists.append((agent.epoch_losses, 'Train', 0, 'regular'))
+lists.append((agent.evaluated_losses, 'Validation', 0, 'regular'))
+
+# Check for the titles setting
+if LR_SCHEDULER:
+    if ('base_learning_rate' in hyperparam_dict.keys()) and ('max_learning_rate' in hyperparam_dict.keys()):
+        tit = str(MODE) + " Convolutional Layers witch Cycling lr decay"
+        tit_ = 'Cyclic Learning Rate decay over the epochs  Gamma: ' + str(GAMMA)+' Base lr: '+str(BASE_LR)+' Max lr: ' +str(MAX_LR)
+    else:
+        tit = str(MODE) + " Convolutional Layers with exponential lr decay   lr from: " +str(LR)
+        tit_ = 'Exponential Learning Rate decay over the epochs  Gamma: ' + str(GAMMA)+' lr: '+str(LR)
+    # Plot lr over the epochs only if lr_scheduler mode is on
+    l= []
+    l.append((agent.lr_list, 'Learning Rates', 0, 'regular'))
+    plot.multi_plot(l, hyperparam_dict, 2,
+                    tit_,
+                    x='Epochs', y='lr value' )
+else:
+    tit = str(MODE) + " Convolutional Layers lr: "+ str(LR)
+        
+plot.multi_plot(lists, hyperparam_dict, 1, tit, x='Epochs', y='Loss')
+
 
 # Saving the hyperparameters dictionary into a file
 hyperparam_dict['total_time']= (time.time() - start_time)/60
