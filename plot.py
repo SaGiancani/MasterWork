@@ -42,13 +42,19 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
     colors = ['orange', 'blue','black', 'green', 'red']
     counter = 0
     for count, i in enumerate(lists_of_tuples):
+        # The third position of the tuple is dedicated to the forma line of plotting: full line or dashed line
         if i[3] == 'dash':
             dot = [1, 4, 1, 4, 1, 4]
         if i[3] != 'dash':
             dot=[]
+        # Simple plot
         if i[2] == 0:
             ax1.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
+        # Plot with 2 y-axis and 1 x-axis
         if i[2] == 1:
+            # If the number 1 is the second element of the i-th tuple, a new y axis is created, on the same 
+            # figure: it shares the same x axis.
+            # The check on the counter is due to the creation of the new y-axis
             if counter == 0:
                 counter +=1
                 ax2 = ax1.twinx()
@@ -58,6 +64,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
             else:
                 ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
                 lines2, labels2 = ax2.get_legend_handles_labels()
+        # Plot with filling area between two different functions
         if i[2]== 2:
             ax1.plot(np.linspace(0, hyperparam_dict['max_episodes'], len(i[0])), 
                      i[0], lw = 1, dashes = dot, label=i[1], color = colors[count])
