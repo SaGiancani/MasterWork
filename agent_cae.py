@@ -164,7 +164,7 @@ class CAE_Agent(object):
             #Printing not yet trained images, one every num_steps 
             loss_value = loss_.item()
             if (epoch%self.interval == 0) and (epoch>0):
-                print('Train Epoch: {}, Loss: {:.2f}, Learning Rate: {}'.format(epoch, loss_, self.lr_list[-1]))
+                print('Train Epoch: {}, Loss: {:.2f}, Learning Rate: {:.6f}'.format(epoch, loss_, self.lr_list[-1]))
             self.images_during_training(output, epoch)
             self.epoch_losses.append(loss_value)
             # Evaluate loss
@@ -204,13 +204,13 @@ class CAE_Agent(object):
                 output = self.model.encoder(imgs.to(self.device))
                 #self.encoder_out = output_pure
                 if (self.mode_cae == 'hybrid'):
-                    tmp = output.view(-1, 2*2*128)
+                    tmp = output.view(-1, 2*2*256)
                     output = self.model.linear_e(tmp.to(self.device))
                 
             if (mode == 'decoder'):
                 if (self.mode_cae == 'hybrid'):
                     tmp = self.model.linear_d(imgs.to(self.device))
-                    imgs = tmp.view(-1, 128, 2, 2)
+                    imgs = tmp.view(-1, 256, 2, 2)
                 # get sample outputs for the decoder of the pure convolutional model
                 output = self.model.decoder(imgs.to(self.device))
                 
