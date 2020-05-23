@@ -23,16 +23,17 @@ BATCH_SIZE = 128
 DROP_LAST = True
 NUM_WORKERS = 1
 PIN_MEMORY = True
-NUM_EPOCHS = 3000
+NUM_EPOCHS = 1000
 IMAGES_DURING_TRAIN = 10
 # Learning rate and parameters for lr_Scheduler
-LR = 5e-2
-GAMMA = 0.998
-#BASE_LR = 9.0e-4
-#MAX_LR = 5e-3
-BASE_LR = None
-MAX_LR = None
+LR = 1e-3
+GAMMA = 0.995
+BASE_LR = 5e-4
+MAX_LR = 5e-3
+#BASE_LR = None
+#MAX_LR = None
 LR_SCHEDULER = True
+#LR_SCHEDULER = False
 # Path for the dataset
 PATH = "learner_teacher_10k.npz"
 TEST_BATCH_NUM = 5
@@ -46,7 +47,7 @@ MODE = 'hybrid'
 # Percentage of the whole dataset dedicated to the Valutation
 PERC_FOR_EVAL= 0.1
 # How many steps between a print and another
-INTERVAL = 100
+INTERVAL = 10
 
 # Initialize the seed
 torch.manual_seed(RANDOM_SEED)
@@ -123,16 +124,20 @@ lists.append((agent.evaluated_losses, 'Validation', 0, 'regular'))
 if LR_SCHEDULER:
     if ('base_learning_rate' in hyperparam_dict.keys()) and ('max_learning_rate' in hyperparam_dict.keys()):
         tit = str(MODE) + " Convolutional Layers witch Cycling lr decay"
-        tit_ = 'Cyclic Learning Rate decay over the epochs  Gamma: ' + str(GAMMA)+' Base lr: '+str(BASE_LR)+' Max lr: ' +str(MAX_LR)
+        tit_ = "Cyclic Learning Rate decay over the epochs  Gamma: " + str(GAMMA)+" Base lr: "+str(BASE_LR)+" Max lr: "+ str(MAX_LR)
+        plot_type = 0
+        # Plot lr over the epochs only if lr_scheduler mode is on
+        l= []
+        l.append((agent.lr_list, 'Learning Rates Decay', plot_type, 'regular'))
+        plot.multi_plot(l, hyperparam_dict, 2,
+                        tit_,
+                        x='Epochs', y='lr value' )
     else:
-        tit = str(MODE) + " Convolutional Layers with exponential lr decay   lr from: " +str(LR)
-        tit_ = 'Exponential Learning Rate decay over the epochs  Gamma: ' + str(GAMMA)+' lr: '+str(LR)
-    # Plot lr over the epochs only if lr_scheduler mode is on
-    l= []
-    l.append((agent.lr_list, 'Learning Rates', 0, 'regular'))
-    plot.multi_plot(l, hyperparam_dict, 2,
-                    tit_,
-                    x='Epochs', y='lr value' )
+        tit = str(MODE) + " Convolutional Layers with exponential lr decay   lr from: " +str(LR)+ "  and Gamma: " + str(GAMMA)
+        # See the multiplot method
+        plot_type = 1
+        lists.append((agent.lr_list, 'Learning Rates Decay', plot_type, 'regular' ))
+
 else:
     tit = str(MODE) + " Convolutional Layers lr: "+ str(LR)
         
