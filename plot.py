@@ -59,7 +59,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
                 counter +=1
                 ax2 = ax1.twinx()
                 ax2.set_ylabel(i[1])  # we already handled the x-label with ax1
-                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= 'orange')
+                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= 'black')
                 lines2, labels2 = ax2.get_legend_handles_labels()
             else:
                 ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
@@ -84,11 +84,14 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
     # One legend for both the plots
     # Putting the legend below, out of the plot, at centre
     #ax2.legend(lines + lines2, labels + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.05),
-                #fancybox=True, shadow=True, ncol=len(lists_of_tuples))
+    #fancybox=True, shadow=True, ncol=len(lists_of_tuples))
+    #loc = 1 upper right
+    #loc = 4 lower right
+    #loc = 0 best
     if counter != 0:
-        ax2.legend(lines + lines2, labels +labels2, loc=4, fancybox=True, shadow=False)
+        ax2.legend(lines + lines2, labels +labels2, loc=1, fancybox=True, shadow=False)
     if counter == 0:
-        ax1.legend(lines, labels, loc=4, fancybox=True, shadow=False)
+        ax1.legend(lines, labels, loc=1, fancybox=True, shadow=False)
 
     ax1.grid()
     fig.suptitle(title, fontsize=20)
