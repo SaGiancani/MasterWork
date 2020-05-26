@@ -23,29 +23,46 @@ BATCH_SIZE = 128
 DROP_LAST = True
 NUM_WORKERS = 1
 PIN_MEMORY = True
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 500
 IMAGES_DURING_TRAIN = 10
 # Learning rate and parameters for lr_Scheduler
-LR = 1e-3
+LR = 5e-4
 GAMMA = 0.995
-BASE_LR = 5e-4
-MAX_LR = 5e-3
-#BASE_LR = None
-#MAX_LR = None
+#GAMMA = 0.99
+#BASE_LR = 5e-6
+#MAX_LR = 5e-5
+BASE_LR = None
+MAX_LR = None
 LR_SCHEDULER = True
 #LR_SCHEDULER = False
-# Path for the dataset
-PATH = "learner_teacher_10k.npz"
+
 TEST_BATCH_NUM = 5
 #Kind of initialization
 #INIT = 'standard'
 INIT = 'xavier_normal'
 #INIT = 'xavier_uniform'
+
 # Architecture mode
-#MODE = 'pure'
-MODE = 'hybrid'
+#MODE = ('pure', None)
+# Path for the dataset
+#PATH = "learner_teacher_10k.npz"
+
+# Architecture mode
+#MODE = ('hybrid', 128)
+# Path for the dataset
+#PATH = "planar_arm_gray_128_20k.npz"
+
+#MODE = ('hybrid', 64)
+# Path for the dataset
+#PATH = "planar_arm_bin_64_100k-Copy1.npz"
+
+MODE = ('hybrid', 32)
+# Path for the dataset
+#PATH = "planar_arm_bin_32_100k-Copy1.npz"
+PATH = "planar_arm_gray_32_100k-Copy1.npz"
+
 # Percentage of the whole dataset dedicated to the Valutation
-PERC_FOR_EVAL= 0.1
+PERC_FOR_EVAL= 0.2
 # How many steps between a print and another
 INTERVAL = 10
 
