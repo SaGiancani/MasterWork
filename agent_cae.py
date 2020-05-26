@@ -7,7 +7,10 @@ import numpy as np
 from itertools import count
 
 import hybrid_cae 
+import hybrid_32_cae
+import hybrid_64_cae
 import pure_cae 
+import utilities as u
 import load_data
 import time
 
@@ -45,28 +48,25 @@ class CAE_Agent(object):
         self.epoch_losses = []
         #Evaluate
         self.evaluated_losses = []
-
-        #Reconstruction
-        # Array to store the original test images
-        self.testdata_input = np.zeros((len(self.images_set), self.batch_size, 1, self.img_size, self.img_size))
-        # Array to store the original test images
-        self.testdata_output = np.zeros((1, self.img_size, self.img_size))
-        # Array to store the code 2x1x1:
-        self.encoder_out = torch.zeros((self.batch_size, 2, 1, 1))
         
-        if self.mode_cae == 'pure':
+        # Loading architecture 
+        if self.mode_cae[0] == 'pure':
             #CAE
             self.model = pure_cae.ConvolutionalAutoencoder().to(self.device)
-        if self.mode_cae == 'hybrid':
+        if (self.mode_cae[0] == 'hybrid') and (self.mode_cae[1] == 128):
             #Hybrid
-            self.model = hybrid_cae.HybridConvolutionalAutoencoder().to(self.device) 
+            self.model = hybrid_cae.HybridConvolutionalAutoencoder().to(self.device)
+        if (self.mode_cae[0] == 'hybrid') and (self.mode_cae[1] == 64):
+            self.model = hybrid_64_cae.HybridConvolutionalAutoencoder().to(self.device)
+        if (self.mode_cae[0] == 'hybrid') and (self.mode_cae[1] == 32):
+            self.model = hybrid_32_cae.HybridConvolutionalAutoencoder().to(self.device)           
        
         #Initialization method
         if ('initialization' in self.h.keys()) and (self.h['initialization'] == 'xavier_normal'):
-            self.model.apply(pure_cae.xavier_init_normal_)
+            self.model.apply(u.xavier_init_normal_)
             
         if ('initialization' in self.h.keys()) and (self.h['initialization'] == 'xavier_uniform'):
-            self.model.apply(pure_cae.xavier_init_uniform)
+            self.model.apply(u.xavier_init_uniform)
         
         #Initialization optimizer and loss-computation algorithm
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
@@ -101,40 +101,6 @@ class CAE_Agent(object):
             tmp = output.cpu().detach().numpy()
             self.img_array.append(tmp[index_img])
             
-    # Reconstruction function
-    def reconstruction_encode(self, epoch, i, img):
-        self.testdata_input[i] = img.detach().cpu().numpy()
-        # latent from pure convolutional encoder and storing
-        latent_pure = self.model.encoder(img)
-        if self.mode_cae == 'hybrid':
-            latent_hybrid_ = model_hybrid.linear_e(latent_hybrid.view(-1, 8*8*128))
-        self.testdata_latent_pure[i] = latent_pure
-        
-        # Encode the images of the test set using the encoder trained on the train set
-        for i,test_data in enumerate(test_image_dataloader):
-            # Preparation original images
-            data = test_data[0].to(device)
-            #print(data.shape)
-            img = data.unsqueeze(1)
-            #print(img.shape)
-        
-            testdata_input[i] = img.detach().cpu().numpy()
-            
-            # latent from pure convolutional encoder and storing
-            latent_pure = model.encoder(img)
-            testdata_latent_pure[i] = latent_pure
-            #if i==4:
-            #    break
-        
-            
-    def reconstruction_decode(self, latents_pure):
-        # Set the autoencoder networks to evaluation mode
-        self.model_pure.eval()
-
-        # Display decoded image from convolutional Autoencoder
-        img_pure = self.model_pure.decoder(latents_pure.to(self.device))
-        self.testdata_output[i] = img_pure[i].cpu().detach().numpy().reshape(128,128)
-        
     def build_batch(self):
         # obtain one batch of test images
         dataiter = iter(self.images_set)
@@ -163,8 +129,10 @@ class CAE_Agent(object):
                 self.lr_list.append(self.optimizer.param_groups[0]['lr'])
             #Printing not yet trained images, one every num_steps 
             loss_value = loss_.item()
-            if (epoch%self.interval == 0) and (epoch>0):
-                print('Train Epoch: {}, Loss: {:.2f}, Learning Rate: {:.6f}'.format(epoch, loss_, self.lr_list[-1]))
+            if (epoch%self.interval == 0) and (epoch>0) and ((self.mode_cae[1] == 64) or (self.mode_cae[1] == 32)):
+                print('Train Epoch: {}, Loss: {:.6f}, Learning Rate: {:.6f}'.format(epoch, loss_, self.lr_list[-1]))
+            if (epoch%self.interval == 0) and (epoch>0) and (self.mode_cae[1] != 64) and (self.mode_cae[1] != 32):
+                print('Train Epoch: {}, Loss: {:.2f}, Learning Rate: {:.6f}'.format(epoch, loss_, self.lr_list[-1]))           
             self.images_during_training(output, epoch)
             self.epoch_losses.append(loss_value)
             # Evaluate loss
@@ -183,8 +151,14 @@ class CAE_Agent(object):
                 loss_ = self.loss(output, img)
             loss_value = loss_.item()
             self.evaluated_losses.append(loss_value)
-            if (len(self.evaluated_losses)%self.interval == 0):
-                print('Valutation loss: {:.2f}'.format(loss_value))
+            if (len(self.evaluated_losses)%self.interval == 0) and (self.mode_cae[1] != 64) and (self.mode_cae[1] != 32):
+                avg_score = np.mean(self.evaluated_losses[max(0, len(self.evaluated_losses)-self.interval):\
+                                                         (len(self.evaluated_losses)+1)])
+                print('Valutation mean loss: {:.2f}'.format(avg_score))
+            if (len(self.evaluated_losses)%self.interval == 0) and ((self.mode_cae[1] == 64) or (self.mode_cae[1] == 32)):
+                avg_score = np.mean(self.evaluated_losses[max(0, len(self.evaluated_losses)-self.interval):\
+                                                         (len(self.evaluated_losses)+1)])
+                print('Valutation mean loss: {:.6f}'.format(avg_score))
             self.model.train()
             return
 
@@ -203,14 +177,20 @@ class CAE_Agent(object):
                 # get sample outputs for the encoder of the pure convolutional model
                 output = self.model.encoder(imgs.to(self.device))
                 #self.encoder_out = output_pure
-                if (self.mode_cae == 'hybrid'):
-                    tmp = output.view(-1, 2*2*256)
+                if (self.mode_cae[0] == 'hybrid'):
+                    if (self.mode_cae[1] != 32):
+                        tmp = output.view(-1, 2*2*256)
+                    if (self.mode_cae[1] == 32):
+                        tmp = output.view(-1, 2*2*128)
                     output = self.model.linear_e(tmp.to(self.device))
                 
             if (mode == 'decoder'):
-                if (self.mode_cae == 'hybrid'):
+                if (self.mode_cae[0] == 'hybrid'):
                     tmp = self.model.linear_d(imgs.to(self.device))
-                    imgs = tmp.view(-1, 256, 2, 2)
+                    if (self.mode_cae[1] != 32):            
+                        imgs = tmp.view(-1, 256, 2, 2)
+                    if (self.mode_cae[1] == 32):
+                        imgs = tmp.view(-1, 128, 2, 2)
                 # get sample outputs for the decoder of the pure convolutional model
                 output = self.model.decoder(imgs.to(self.device))
                 
