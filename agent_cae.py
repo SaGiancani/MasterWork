@@ -77,15 +77,18 @@ class CAE_Agent(object):
         if self.sched_mode:
             self.gamma = self.h['gamma']
             if ('base_learning_rate' in self.h.keys()) and ('max_learning_rate' in self.h.keys()):
+                self.step_up = self.h['step_up_triangle']
+                self.step_down = self.h['step_down_triangle']
+                self.mode_scheduler = self.h['cyclic_scheduler_mode']
                 self.lr_base = self.h['base_learning_rate']
                 self.lr_max = self.h['max_learning_rate']
                 self.scheduler_lr = torch.optim.lr_scheduler.CyclicLR(self.optimizer, 
                                                                       self.lr_base,
                                                                       self.lr_max,
-                                                                      step_size_up=self.epochs/10,
-                                                                      step_size_down=None,
+                                                                      step_size_up=self.step_up,
+                                                                      step_size_down=self.step_down,
                                                                       cycle_momentum = False,
-                                                                      mode='exp_range',
+                                                                      mode=self.mode_scheduler,
                                                                       gamma=self.gamma)
             else:
                 self.scheduler_lr = torch.optim.lr_scheduler.ExponentialLR(self.optimizer,gamma=self.gamma) 
