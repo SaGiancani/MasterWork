@@ -26,15 +26,27 @@ PIN_MEMORY = True
 NUM_EPOCHS = 500
 IMAGES_DURING_TRAIN = 10
 # Learning rate and parameters for lr_Scheduler
-LR = 5e-4
+LR = 1e-4
 GAMMA = 0.995
-#GAMMA = 0.99
-#BASE_LR = 5e-6
-#MAX_LR = 5e-5
-BASE_LR = None
-MAX_LR = None
+#MODE_DEC = 'EXP'
+MODE_DEC = 'CYCLIC'
 LR_SCHEDULER = True
 #LR_SCHEDULER = False
+#GAMMA = 0.99
+if MODE_DEC == 'EXP' and LR_SCHEDULER:
+    BASE_LR = None
+    MAX_LR = None
+    STEP_UP_TRIANGLE = None
+    STEP_DOWN_TRIANGLE = None 
+    MODE_SCHEDULER = None
+    
+if MODE_DEC == 'CYCLIC' and LR_SCHEDULER:
+    BASE_LR = 5e-5
+    MAX_LR = 5e-4
+    STEP_UP_TRIANGLE = NUM_EPOCHS/10
+    STEP_DOWN_TRIANGLE = None 
+    MODE_SCHEDULER = 'triangular'
+    #MODE_SCHEDULER = 'exp_range'
 
 TEST_BATCH_NUM = 5
 #Kind of initialization
@@ -47,19 +59,23 @@ INIT = 'xavier_normal'
 # Path for the dataset
 #PATH = "learner_teacher_10k.npz"
 
-# Architecture mode
-#MODE = ('hybrid', 128)
+# Architecture mode 128x128
+MODE = ('hybrid', 128)
 # Path for the dataset
 #PATH = "planar_arm_gray_128_20k.npz"
+PATH = "learner_teacher_10k.npz"
 
+# Architecture mode 64x64
 #MODE = ('hybrid', 64)
 # Path for the dataset
 #PATH = "planar_arm_bin_64_100k-Copy1.npz"
+#PATH = "planar_arm_gray_64_100k-Copy1.npz"
 
-MODE = ('hybrid', 32)
+# Architecture mode 32x32
+#MODE = ('hybrid', 32)
 # Path for the dataset
 #PATH = "planar_arm_bin_32_100k-Copy1.npz"
-PATH = "planar_arm_gray_32_100k-Copy1.npz"
+#PATH = "planar_arm_gray_32_100k-Copy1.npz"
 
 # Percentage of the whole dataset dedicated to the Valutation
 PERC_FOR_EVAL= 0.2
@@ -91,7 +107,10 @@ hyperparam_dict = {'name': FILENAME,
                    'mode': MODE,
                    'percentage_of_dataset_for_eval': PERC_FOR_EVAL,
                    'interval_for_print': INTERVAL,
-                   'lr_scheduler_mode': LR_SCHEDULER
+                   'lr_scheduler_mode': LR_SCHEDULER,
+                   'cyclic_scheduler_mode': MODE_SCHEDULER,
+                   'step_up_triangle': STEP_UP_TRIANGLE,
+                   'step_down_triangle': STEP_DOWN_TRIANGLE
                    }
 
 # Check for the use of lr_scheduler: if Base and Max lr are not instantiated, the program use the simple optimizer 
