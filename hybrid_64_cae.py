@@ -38,38 +38,74 @@ class HybridConvolutionalAutoencoder(nn.Module):
         )
         
         self.linear_e = nn.Sequential(
-            nn.Linear(2*2*256, 16),
+            nn.Linear(2*2*256, 10),
             nn.ReLU(),
-            nn.Linear(16,2),
-            nn.ReLU(),
+            #nn.Linear(16,2),
+            #nn.ReLU(),
         )
         
         self.linear_d = nn.Sequential(
-            nn.Linear(2, 16),
-            nn.ReLU(inplace=True),
-            nn.Linear(16, 2*2*256),
+            #nn.Linear(2, 16),
+            #nn.ReLU(inplace=True),
+            nn.Linear(10, 2*2*256),
         )
-    
+        
         self.decoder = nn.Sequential(                                  
-            nn.ConvTranspose2d(256, 256, 4,  stride=2),   #7x7
+            nn.ConvTranspose2d(256, 256, 2, stride=1),   #15x15
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),            
+            nn.ReLU(inplace=True),
             
-            nn.ConvTranspose2d(256, 128, 4, stride=2),   #15x15
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),            
-            
-            nn.ConvTranspose2d(128, 128, 4, stride=2),   #31x31
+            nn.ConvTranspose2d(256, 128, 3, stride=3),   #15x15
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             
-            nn.ConvTranspose2d(128, 64, 4, stride=2),  #63x63
+            nn.ConvTranspose2d(128, 128, 3, stride=1),   #15x15
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            
+            nn.ConvTranspose2d(128, 64, 3, stride=1),   #15x15
             nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            
+            nn.ConvTranspose2d(64, 64, 2,  stride=2),   #7x7
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),            
+            
+            nn.ConvTranspose2d(64, 64, 3, stride=1),   #15x15
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),            
+            
+            nn.ConvTranspose2d(64, 32, 3, stride=1),   #31x31
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            
+            nn.ConvTranspose2d(32, 32, 2, stride=2),  #63x63
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),  
             
-            nn.ConvTranspose2d(64, 1, 3, stride=1),  #63x63
+            nn.ConvTranspose2d(32, 1, 5, stride=1),  #63x63
             nn.ReLU(inplace=True),
         )
+        #self.decoder = nn.Sequential(                                  
+        #    nn.ConvTranspose2d(256, 256, 4,  stride=2),   #7x7
+        #    nn.BatchNorm2d(256),
+        #    nn.ReLU(inplace=True),            
+            
+        #    nn.ConvTranspose2d(256, 128, 4, stride=2),   #15x15
+        #    nn.BatchNorm2d(128),
+        #    nn.ReLU(inplace=True),            
+            
+        #    nn.ConvTranspose2d(128, 128, 4, stride=2),   #31x31
+        #    nn.BatchNorm2d(128),
+        #    nn.ReLU(inplace=True),
+            
+        #    nn.ConvTranspose2d(128, 64, 4, stride=2),  #63x63
+        #    nn.BatchNorm2d(64),
+        #    nn.ReLU(inplace=True),  
+            
+        #    nn.ConvTranspose2d(64, 1, 3, stride=1),  #63x63
+        #    nn.ReLU(inplace=True),
+        #)
     def forward(self, x):
         x = self.encoder(x)
         #print('encoder(x): '+str(x.shape))
