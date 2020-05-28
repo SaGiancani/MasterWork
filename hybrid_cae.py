@@ -40,16 +40,16 @@ class HybridConvolutionalAutoencoder(nn.Module):
         )
         
         self.linear_e = nn.Sequential(
-            nn.Linear(2*2*256, 16),
+            nn.Linear(2*2*256, 10),
             nn.ReLU(),
-            nn.Linear(16,2),
-            nn.ReLU(),
+            #nn.Linear(16,2),
+            #nn.ReLU(),
         )
         
         self.linear_d = nn.Sequential(
-            nn.Linear(2, 16),
-            nn.ReLU(inplace=True),
-            nn.Linear(16, 2*2*256),
+            #nn.Linear(2, 16),
+            #nn.ReLU(inplace=True),
+            nn.Linear(10, 2*2*256),
         )
         
         self.decoder = nn.Sequential(                                  
