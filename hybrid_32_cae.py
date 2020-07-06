@@ -86,3 +86,13 @@ class HybridConvolutionalAutoencoder(nn.Module):
         distutils.dir_util.mkpath(filename)
         torch.save(self.state_dict(), filename+'/'+filename +'_model.pt')
         
+    @staticmethod
+    def load(state_file='policy_network_splittedscripts.pt'):
+        # Create a network object with the constructor parameters
+        policy = HybridConvolutionalAutoencoder()
+        # Load the weights
+        policy.load_state_dict(torch.load(state_file))
+        # Set the network to evaluation mode
+        policy.eval()
+        return policy
+        
