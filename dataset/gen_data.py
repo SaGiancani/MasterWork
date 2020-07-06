@@ -61,6 +61,34 @@ def generate_save_images(dataset_file, img_cnt, img_size, img_binary, dtype_num)
 
     np.savez_compressed(dataset_file, array=image_dataset)
 
+def generate_images_agent(observation, img_size, img_binary, dtype_num):
+    
+    if dtype_num==16:
+        dtype_np = np.float16
+    elif dtype_num==32:
+        dtype_np = np.float32
+    elif dtype_num==64:
+        dtype_np = np.float64
+        
+    # Scale the images
+    learner_img = cv.resize(observation[0], (img_size,img_size), interpolation=cv.INTER_AREA)
+    teacher_img = cv.resize(observation[1], (img_size,img_size), interpolation=cv.INTER_AREA)
+
+    # Convert to binary images
+    learner_img = cv.cvtColor(learner_img, cv.COLOR_BGR2GRAY)
+    if img_binary:
+        _, learner_img = cv.threshold(learner_img,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+
+    teacher_img = cv.cvtColor(teacher_img, cv.COLOR_BGR2GRAY)
+    if img_binary:
+        _, teacher_img = cv.threshold(teacher_img,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+
+    # Convert the pixels from 0..255 to 0..1
+    learner_img = learner_img.astype(np.float)/255.0
+    teacher_img = teacher_img.astype(np.float)/255.0
+    
+    return learner_img, teacher_img
+
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Generate state images from the environment')
