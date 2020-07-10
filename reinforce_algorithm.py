@@ -7,7 +7,6 @@ from torch.distributions import Categorical
 import numpy as np
 from itertools import count
 import neural_network_policy as N
-import baseline as b
 import random
 import time
 
@@ -112,6 +111,7 @@ class REINFORCE_Agent(object):
         G_base = 0
                 
         # If the baseline mode is actived this algorithm is used
+        # It doesnt work
         if baseline_switch and (self.states != None):
             # Go through the list of observed rewards and calculate the returns
             # gamma discount factor
@@ -182,13 +182,17 @@ class REINFORCE_Agent(object):
         
             # Here, we deviate from the standard REINFORCE algorithm as discussed above
             for log_prob, G in zip(self.policy.saved_log_probs, returns):
-                policy_loss.append(-log_prob * G)
+                #print('G'+str(G))
+                #print('log_prob'+str(log_prob.squeeze()))
+                policy_loss.append(-log_prob.squeeze() * G)
         
             # Reset the gradients of the parameters
             self.optimizer.zero_grad()
-    
+            #print(policy_loss)
             # Compute the cumulative loss
-            policy_loss = torch.cat(policy_loss).mean()
+            #policy_loss = torch.cat(policy_loss).mean()
+            #torch.stack in place of the torch.cat for using it on gpu-machine (old version on pytorch)
+            policy_loss = torch.stack(policy_loss).mean()
     
             # Backpropagate the loss through the network
             policy_loss.backward()
@@ -201,7 +205,18 @@ class REINFORCE_Agent(object):
             del self.policy.saved_log_probs[:]
 
 
-def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', chooser=None, log_interval=100, tb=None):
+def reinforce(max_steps,
+              max_episodes, 
+              env,
+              Agent,
+              render=False,
+              mode='train', 
+              chooser=None,
+              log_interval=100,
+              tb=None,
+              whole_loop = False,
+              agent_whole = None):
+    
     if mode == 'train':
         select_action = Agent.h['select_action_algorithm']
         max_steps_eval = Agent.h['max_steps_eval']
@@ -229,9 +244,14 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
         # Make an empty list to store the actions for the TensorBoardX
         #actions_prob = torch.zeros(hyperparam_dict['max_steps'], 27)
         #actions_array = torch.zeros((hyperparam_dict['max_steps']), 1)
-
+        if whole_loop:
+            state = agent_whole.vision_module(env, 'reset', None)
+            state = agent_whole.join_observations(state)
+        else:
+            state = env.reset()
+            
         # Reset the environment
-        state, ep_reward = env.reset(), 0
+        ep_reward = 0
         # For each step of the episode
         for t in range(0, max_steps):
             Agent.counter +=1          
@@ -248,8 +268,13 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
                 #actions_prob[t][:]= probs
                 actions_array.append(action)
                 
-                # Perform the action and note the next state and reward
-                state, reward, done, _ = env.step(action)
+                if whole_loop:
+                    state, reward, done = agent_whole.vision_module(env, 'step', action)
+                    state = agent_whole.join_observations(state)
+            
+                else:
+                    # Perform the action and note the next state and reward
+                    state, reward, done, _ = env.step(action)
 
                 # Store the current reward
                 Agent.policy.rewards.append(reward)
@@ -273,8 +298,14 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
                     action = Agent.select_random_action_eval(env)
                     actions_array.append(action)
                   
-                # Perform the action and note the next state and reward
-                state, reward, done, _ = env.step(action)
+                if whole_loop:
+                    #If I'm using the whole loop approach I need to do some transformations
+                    state, reward, done = agent_whole.vision_module(env, 'step', action)
+                    state = agent_whole.join_observations(state)
+            
+                else:
+                    # Perform the action and note the next state and reward
+                    state, reward, done, _ = env.step(action)
             
             if render:
                 env.render()
@@ -329,10 +360,14 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
                 
             # Evaluation Loop
             if (i_episode % Agent.EVALUATE_MODE == 0):
-                #Recall the reinforce algorithm without exploration select-action algorithm
-                _, _, average_reward_episode, std_reward_episode = eval_into_reinforce(max_steps_eval, 
-                                                                                       max_episodes_eval,
-                                                                                       env, Agent)      
+                if whole_loop:
+                    #Recall the reinforce algorithm without exploration select-action algorithm
+                    _, _, average_reward_episode, std_reward_episode = eval_into_reinforce(max_steps_eval, 
+                                                                                           max_episodes_eval,
+                                                                                           env, 
+                                                                                           Agent, 
+                                                                                           whole_loop,
+                                                                                           agent_whole)      
                 #Storing the data into lists for plotting
                 mean_eval_rewards.append(average_reward_episode)
                 std_eval_rewards.append(std_reward_episode)
@@ -345,7 +380,7 @@ def reinforce(max_steps, max_episodes, env, Agent, render=False, mode='train', c
                 print('Counter: ' + str(Agent.counter))
                 return ep_rewards, running_rewards, mean_eval_rewards, std_eval_rewards
 
-def eval_into_reinforce(max_steps, max_episodes, env, Agent):
+def eval_into_reinforce(max_steps, max_episodes, env, Agent, whole_loop=False, agent_whole=None):
     #Recall the reinforce algorithm with without exploration select-action algorithm
     policy_eval_ep_rewards, policy_eval_running_rewards, _= reinforce(max_steps,
                                                                       max_episodes,
@@ -353,7 +388,9 @@ def eval_into_reinforce(max_steps, max_episodes, env, Agent):
                                                                       Agent, 
                                                                       render=False,
                                                                       mode='eval',
-                                                                      chooser = 1)
+                                                                      chooser = 1,
+                                                                      whole_loop = whole_loop,
+                                                                      agent_whole = agent_whole)
 
     run = np.array(policy_eval_running_rewards)
     ep = np.array(policy_eval_ep_rewards)
