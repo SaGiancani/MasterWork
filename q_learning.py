@@ -14,17 +14,20 @@ class DQN_Agent(object):
     def __init__(self, h):
         # Setting the Hyperparameters
         self.h = h
-        self.BATCH_SIZE = h['batch_size']
+        self.n_actions = h['actions']
+        self.n_states = h['states']
         self.GAMMA = h['gamma']
+        self.lr = h['learning_rate']
+        
+        # Peculiarities of DQN
         self.EPS_START = h['epsilon']
         self.EPS_END = h['epsilon_ending']
         self.EPS_DECAY = h['epsilon_decay']
         self.TARGET_UPDATE = h['target_update']
-        self.n_actions = h['actions']
-        self.n_states = h['states']
         self.mem_size = h['memory_size']
-        self.lr = h['learning_rate']
+        self.BATCH_SIZE = h['batch_size']
         self.action_space = [i for i in range(self.n_actions)]
+        
         # Instantiate the Networks
         self.policy_net = N.NeuralNetworkPolicy(self.n_actions, self.n_states)
         self.target_net = N.NeuralNetworkPolicy(self.n_actions, self.n_states)
@@ -119,7 +122,7 @@ class DQN_Agent(object):
         new_state_batch = torch.from_numpy(new_state_batch).float().unsqueeze(1)
         action_batch = torch.from_numpy(action_indices).int().unsqueeze(1)
         reward_batch = torch.Tensor(reward_batch)
-        terminal_batch = torch.Tensor(terminal_batch).int()
+        terminal_batch = torch.Tensor(terminal_batch).float()
         # The DQN Notebook on pytorch works with batch elements like column tensor 
         # Using torch.cat() to avoid nested tensors
         state_batch_ = torch.cat([c for c in state_batch])
@@ -138,7 +141,7 @@ class DQN_Agent(object):
         next_state_values  = torch.max(self.target_net(new_state_batch_),dim =1)[0]
 
         # Compute the expected Q values
-        batch_index = np.arange(self.BATCH_SIZE, dtype=np.int32) 
+        batch_index = np.arange(self.BATCH_SIZE, dtype=np.int32)
         expected_state_action_values[batch_index, action_indices]= reward_batch + self.GAMMA*next_state_values*terminal_batch
 
         # Compute Huber loss
@@ -156,7 +159,8 @@ class DQN_Agent(object):
     def print_values(self, i_episode, episodic_reward, episodic_rewards, running_reward, log_interval, time_count):
         if (i_episode % log_interval == 0) \
         and (i_episode > 0) \
-        and (self.h['environment'] == 'PlanarArmTeacher2Learner3-v1'):
+        and (self.h['environment'] == 'PlanarArmTeacher2Learner3-v1' or\
+             self.h['environment'] == 'PlanarArmTeacher2Learner3-v2'):
             time_count = (time.time()-time_count)/60
             print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}\tEpsilon: {:.2f}\tTime: {:.2f}'\
                   .format(i_episode, episodic_reward, running_reward,  self.eps_threshold, time_count))
@@ -175,7 +179,7 @@ class DQN_Agent(object):
         return time_count
         
 
-def q_learning(env, DQN_Agent, log_interval = 100):
+def q_learning(env, DQN_Agent, log_interval = 100, whole_loop = False, agent_whole = None):
     num_episodes = DQN_Agent.h['max_episodes']
     num_steps = DQN_Agent.h['max_steps']
     running_rewards = []
@@ -185,7 +189,13 @@ def q_learning(env, DQN_Agent, log_interval = 100):
     eps_history_avg = []
     for i_episode in count(1):
     # Initialize the environment and state
-        state = env.reset()
+        
+        if whole_loop:
+            state = agent_whole.vision_module(env, 'reset', None)
+            state = agent_whole.join_observations(state)
+        else:
+            state = env.reset()
+            
         episodic_reward = 0
         t = 0
         #done = False       
@@ -194,7 +204,14 @@ def q_learning(env, DQN_Agent, log_interval = 100):
             # Select and perform an action
             action = DQN_Agent.choose_action(torch.Tensor([state]))
             #action = DQN_Agent.select_action(torch.Tensor([state]))
-            state_, reward, done, _ = env.step(action.item())
+            
+            if whole_loop:
+                state_, reward, done = agent_whole.vision_module(env, 'step', action)
+                state_ = agent_whole.join_observations(state_)
+            
+            else:
+                state_, reward, done, _ = env.step(action.item())
+            
             reward = torch.tensor([reward])
             next_state = state_
             
@@ -216,7 +233,7 @@ def q_learning(env, DQN_Agent, log_interval = 100):
                                 
             # +1 to the counter
             t +=1
-                                                    
+        
         # Update the running reward: applying a exponential moving average 
         if running_reward is None:
             running_reward = episodic_reward
