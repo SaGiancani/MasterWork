@@ -59,7 +59,7 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
                 counter +=1
                 ax2 = ax1.twinx()
                 ax2.set_ylabel(i[1])  # we already handled the x-label with ax1
-                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= 'black')
+                ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= 'orange')
                 lines2, labels2 = ax2.get_legend_handles_labels()
             else:
                 ax2.plot(range(len(i[0])), i[0], lw=2, dashes = dot, label=i[1], color= colors[count])
