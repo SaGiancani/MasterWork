@@ -87,7 +87,7 @@ def generate_images_agent(observation, img_size, img_binary, dtype_num):
     learner_img = learner_img.astype(np.float)/255.0
     teacher_img = teacher_img.astype(np.float)/255.0
     
-    return learner_img, teacher_img
+    return (learner_img, teacher_img)
 
 
 if __name__=="__main__":
