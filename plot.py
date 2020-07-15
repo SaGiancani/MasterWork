@@ -31,7 +31,10 @@ def plot_reward(a, b, name_a, name_b, hyperparam_dict, num=1):
     fig.savefig(hyperparam_dict['name']+'/'+name_a+'_fig'+str(num)+'.png')
 
     
-def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Rewards'): 
+def multi_plot(lists_of_tuples, hyperparam_dict, num, title, locality = 1, x='Episodes', y='Rewards'): 
+    #locality = 1 upper right
+    #locality = 4 lower right
+    #locality = 0 best
     # Dangerous handling of the num figure
     #num = np.random.randint(0, 1000)
     plt.rcParams.update({'font.size': 18})
@@ -89,9 +92,9 @@ def multi_plot(lists_of_tuples, hyperparam_dict, num, title, x='Episodes', y='Re
     #loc = 4 lower right
     #loc = 0 best
     if counter != 0:
-        ax2.legend(lines + lines2, labels +labels2, loc=1, fancybox=True, shadow=False)
+        ax2.legend(lines + lines2, labels +labels2, loc=locality, fancybox=True, shadow=False)
     if counter == 0:
-        ax1.legend(lines, labels, loc=1, fancybox=True, shadow=False)
+        ax1.legend(lines, labels, loc=locality, fancybox=True, shadow=False)
 
     ax1.grid()
     fig.suptitle(title, fontsize=20)
