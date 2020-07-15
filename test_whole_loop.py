@@ -61,7 +61,7 @@ if algorithm == 'REINFORCE':
     
     # Initialization of the max_episodes, max_steps variables:
     # Max Steps threshold set to 15000
-    max_episodes, max_steps, interval = 3000, 300, 100
+    max_episodes, max_steps, interval = 10000, 400, 100
 
     # The interval of train episodes between an evaluation and other
     evaluation_interval = 5
@@ -70,7 +70,8 @@ if algorithm == 'REINFORCE':
     max_episodes_eval, max_steps_eval = 10, max_steps
 
     # Initialize an epsilon value for the greed algorithm, the learning rate, gamma
-    epsilon = 0.1    
+    # For epsilon = 0.1 there is the 10% of the probability to take a random action
+    epsilon = 0.05  
     gamma = 0.9
     
     # Initialize TensorBoard for the visualization of the data
@@ -99,10 +100,10 @@ if algorithm == 'REINFORCE':
         
 if algorithm == 'DQN':
     gamma = 0.99
-    max_episodes, max_steps = 100, 10
+    max_episodes, max_steps = 8000, 200
     epsilon = 1
     eps_end = 0.01
-    eps_dec = 0.996
+    eps_dec = 0.99
     target_update = 1
     batch_size = 32
     memory_size =  100000
@@ -116,6 +117,16 @@ if algorithm == 'DQN':
     hyperparam_dict['target_update']=target_update
     hyperparam_dict['batch_size']=batch_size 
     hyperparam_dict['memory_size'] =memory_size
+    
+    #Evaluation interval during the training
+    eval_mode = True
+    #eval_mode = False
+    if eval_mode:
+        eval_interval = 5
+        hyperparam_dict['evaluation_interval'] = eval_interval
+        hyperparam_dict['max_episodes_eval'] = 10
+        hyperparam_dict['max_steps_eval'] = max_steps
+
     
 agent_all = a.Agent(hyperparam_dict)
 
@@ -132,6 +143,11 @@ if algorithm == 'REINFORCE':
                                                                   whole_loop = True,
                                                                   agent_whole = agent_all)
     
+    # A list for plotting, storing the hyperparameters and the corresponding results
+    results_neural_network = list()
+    results_neural_network_meanstd = list()
+    storing_list = list()
+
     # Store the results
     #results_neural_network.append((ep_rewards, 'Episode Rewards', 0, 'dash'))
     #results_neural_network.append((running_rewards, 'Running Rewards', 0, 'regular'))
@@ -156,11 +172,11 @@ if algorithm == 'REINFORCE':
     
     
 if algorithm == 'DQN':
-    ep_rewards, running_rewards, eps_history = qlt.q_learning(env, 
-                                                              agent_all.agent, 
-                                                              log_interval = 100,
-                                                              whole_loop = True,
-                                                              agent_whole = agent_all)
+    ep_rewards, running_rewards, eps_history, avg, std = qlt.q_learning(env, 
+                                                                        agent_all.agent, 
+                                                                        log_interval = 100,
+                                                                        whole_loop = True,
+                                                                        agent_whole = agent_all)
     
     print('Total steps: ' + str(agent_all.agent.steps_done))
     # Calculate the total time of execution
@@ -168,11 +184,19 @@ if algorithm == 'DQN':
     
     # Plot
     lists = []
+    meanstd = []
+    list_loop = []
+
     #lists.append((ep_rewards, 'Episode Rewards', 0, 'dash'))
+    meanstd.append((avg, 'Std/Mean Reward Evaluation', 2, 'regular',std ))
     lists.append((running_rewards, 'Running Rewards', 4, 'regular', ep_rewards))
     lists.append((eps_history, 'Epsilon History', 1, 'regular'))
     #lists.append((avg_score, 'Average Rewards', 0))
-    plot.multi_plot(lists, hyperparam_dict, 1, 'DQN')
+    list_loop.append(lists)
+    list_loop.append(meanstd)
+
+    for k, i in enumerate(list_loop):
+        plot.multi_plot(i, hyperparam_dict, k, 'DQN', locality = 4)
     
     # Saving the hyperparameters dictionary into a file
     hyperparam_dict['total_time']= (time.time() - start_time)/60
