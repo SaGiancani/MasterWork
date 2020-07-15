@@ -26,6 +26,8 @@ class DQN_Agent(object):
         self.TARGET_UPDATE = h['target_update']
         self.mem_size = h['memory_size']
         self.BATCH_SIZE = h['batch_size']
+        if ('evaluation_interval' in self.h.keys()):
+            self.EVALUATE_MODE = h['evaluation_interval']
         self.action_space = [i for i in range(self.n_actions)]
         
         # Instantiate the Networks
@@ -40,13 +42,16 @@ class DQN_Agent(object):
         self.steps_done = 0
         self.eps_threshold = 0
         # Storing list for the epsilon over the time
-        self.eps_history = []
+        self.eps_history = []    
         
     def eps_decay_linear_eq(self):
         # The equation is thought on a given number of iterations. 
         # It doesnt work good with done mode breaking of the steps loop
         # The linear decay idea is taken from Mnih 2013, Playing Atari with Deep Reinforcement Learning
-        x = (self.h['max_steps']*self.h['max_episodes'])*3/4
+        if (self.h['environment'] == 'CartPole-v0'):
+            x =1500
+        else:
+            x = (self.h['max_steps']*self.h['max_episodes'])*3/4
         if self.steps_done >= x:
             self.eps_threshold =  self.EPS_END
         else: 
@@ -61,6 +66,14 @@ class DQN_Agent(object):
         #self.eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * self.steps_done / self.EPS_DECAY)
         self.eps_threshold = self.eps_threshold*self.EPS_DEC if self.eps_threshold > self.EPS_MIN else self.EPS_MIN
         return self.eps_threshold
+
+    def choose_eval_action(self, observation, chooser):
+        if chooser == 0:
+            action = np.random.choice(self.action_space)
+        if chooser == 1:
+            actions = self.policy_net.forward(observation)
+            action = torch.argmax(actions).item()
+        return torch.tensor([action])
 
     def choose_action(self, observation):
         rand = np.random.random()
@@ -184,6 +197,9 @@ def q_learning(env, DQN_Agent, log_interval = 100, whole_loop = False, agent_who
     num_steps = DQN_Agent.h['max_steps']
     running_rewards = []
     episodic_rewards = []
+    # Lists to store mean and standard deviation for evaluation plotting 
+    mean_eval_rewards = []
+    std_eval_rewards = []    
     running_reward = None
     time_count = time.time()
     eps_history_avg = []
@@ -251,6 +267,20 @@ def q_learning(env, DQN_Agent, log_interval = 100, whole_loop = False, agent_who
                                             episodic_rewards, running_reward, 
                                             log_interval, time_count)
                          
+        # Evaluation Loop
+        if ('evaluation_interval' in DQN_Agent.h.keys()):
+            if (i_episode % DQN_Agent.EVALUATE_MODE == 0):
+            #Recall the reinforce algorithm without exploration select-action algorithm
+                _, _, average_reward_episode, std_reward_episode = eval_q_learning(env,
+                                                                                   DQN_Agent,
+                                                                                   chooser= 1,
+                                                                                   whole_loop = whole_loop, 
+                                                                                   agent_whole = agent_whole)  
+                
+                #Storing the data into lists for plotting
+                mean_eval_rewards.append(average_reward_episode)
+                std_eval_rewards.append(std_reward_episode)        
+            
         # Stopping criteria
         if i_episode >= num_episodes:
             print('Max episodes exceeded, quitting.')
@@ -263,4 +293,72 @@ def q_learning(env, DQN_Agent, log_interval = 100, whole_loop = False, agent_who
     # Save the data in the Q array
     DQN_Agent.policy_net.save(DQN_Agent.h['name'])
     
-    return episodic_rewards, running_rewards, eps_history_avg
+    return episodic_rewards, running_rewards, eps_history_avg, mean_eval_rewards, std_eval_rewards
+
+
+def eval_q_learning(env, DQN_Agent, chooser=1, whole_loop = False, agent_whole = None):
+    num_episodes_eval = DQN_Agent.h['max_episodes_eval']
+    num_steps_eval = DQN_Agent.h['max_steps_eval']
+    running_rewards = []
+    episodic_rewards = []
+    running_reward = None
+    time_count = time.time()
+    for i_episode in count(1):
+    # Initialize the environment and state
+        if whole_loop:
+            state = agent_whole.vision_module(env, 'reset', None)
+            state = agent_whole.join_observations(state)
+        else:
+            state = env.reset()
+        
+        episodic_reward = 0
+        #done = False       
+
+        for i in range(0, num_steps_eval):
+            # Select and perform an action
+            action = DQN_Agent.choose_eval_action(torch.Tensor([state]), chooser)
+            if whole_loop:
+                state_, reward, done = agent_whole.vision_module(env, 'step', action)
+                state_ = agent_whole.join_observations(state_)
+            
+            else:
+                state_, reward, done, _ = env.step(action.item())
+            # Storing the reward
+            reward = torch.tensor([reward])
+            episodic_reward += reward.item()
+            
+            # Move to the next state
+            state = state_
+
+            if done:
+                break
+                                
+        # Update the running reward: applying a exponential moving average 
+        if running_reward is None:
+            running_reward = episodic_reward
+        else:
+            running_reward = 0.05 * episodic_reward + ( 1- 0.05) * running_reward
+            
+        # Appending of the values to plot
+        episodic_rewards.append(episodic_reward)
+        running_rewards.append(running_reward)
+                # Stopping criteria
+    
+        if i_episode >= num_episodes_eval:
+            break                     
+    run = np.array(running_rewards)
+    ep = np.array(episodic_rewards)
+    #print('ep'+ str(ep))
+
+    #Compute the mean value of the obtained rewards	
+    average_reward_running = run.mean()
+    average_reward_episode = ep.mean()     
+    #print('average '+ str(average_reward_episode))
+
+    #Compute the standard deviation of the obtained rewards
+    std_reward_running = run.std()
+    std_reward_episode = ep.std()
+    #print('std '+ str(std_reward_episode))
+    
+    return average_reward_running, std_reward_running, average_reward_episode, std_reward_episode
+
